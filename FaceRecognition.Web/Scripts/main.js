@@ -19,22 +19,22 @@
 			data: { '': canvas.toDataURL('image/jpeg') }
 		})
 		.then(function (data) {
-			var predictImg = document.getElementById("predict-img");
-			var predictName = document.getElementById("predict-name");
+		    var $predictImg = $('#predict-image');
+		    var $predictName = $('#predict-name');
 
-			if (data.length) {
+			if (data && data.length) {
 				var name = data[0].Name;
-				predictImg.src = "/api/face/image/" + name;
-				predictName.innerText = name;
+				$predictImg.attr('src', "/api/face/image/" + name).addClass('known');
+				$predictName.text(name);
 			} else {
-				predictImg.src = null;
-				predictName.innerText = '';
+			    $predictImg.attr('src', '/Content/unknown.png').removeClass('known');
+			    $predictName.text('');
 			}
 
 		});
 	}
 
-	setInterval(updateIdentifications, 5000);
+	setInterval(updateIdentifications, 2500);
 
 	function setupCapture() {
 		var captureButton = document.getElementById("capture-button");

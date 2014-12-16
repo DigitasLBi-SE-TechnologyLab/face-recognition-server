@@ -47,6 +47,10 @@ namespace FaceRecognition.Web.Controllers
         public Models.User[] DetectUser([FromBody]string image)
         {
             var root = HostingEnvironment.MapPath("~/App_Data/users");
+
+            if (!Directory.Exists(root))
+                return null;
+
             var images = Directory.EnumerateDirectories(root)
                 .OrderBy(p => p)
                 .SelectMany(person => Directory.EnumerateFiles(person, "*.jpg")
