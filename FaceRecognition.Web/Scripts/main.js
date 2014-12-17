@@ -2,7 +2,6 @@
 (function () {
 
 	var video = document.getElementById("capture-video");
-
 	var capturesContainer = document.getElementById("captures-container");
 
 	function updateIdentifications() {
@@ -16,25 +15,36 @@
 		$.ajax({
 			type: 'POST',
 			url: '/api/face/detect',
-			data: { '': canvas.toDataURL('image/jpeg') }
+            // Strip start of dataURL string which contains some funky stuff
+			data: { '': getBase64(canvas) }
 		})
 		.then(function (data) {
+		    var $predictQuestion = $('#predict-question');
 		    var $predictImg = $('#predict-image');
 		    var $predictName = $('#predict-name');
 
 			if (data && data.length) {
-				var name = data[0].Name;
+			    var name = data[0].Name;
 				$predictImg.attr('src', "/api/face/image/" + name).addClass('known');
 				$predictName.text(name);
+				$predictQuestion.text('Är detta du?');
 			} else {
 			    $predictImg.attr('src', '/Content/unknown.png').removeClass('known');
 			    $predictName.text('');
+			    $predictQuestion.text('Vem är du?');
 			}
 
 		});
 	}
 
 	setInterval(updateIdentifications, 2500);
+
+
+	function getBase64(canvas) {
+	    var dataurl = canvas.toDataURL('image/jpg');
+	    var stripped = dataurl.substring(22);
+	    return stripped;
+	}
 
 	function setupCapture() {
 		var captureButton = document.getElementById("capture-button");
@@ -93,7 +103,7 @@
 					waitHandles.push($.ajax({
 						type: 'POST',
 						url: '/api/face/learn/' + document.getElementById("user-name").value,
-						data: { '': canvas.toDataURL('image/jpeg') }
+						data: { '': getBase64(canvas) }
 					}));
 				}
 			}
