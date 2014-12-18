@@ -1,50 +1,77 @@
 ﻿
-(function () {
+(function ($) {
 
-	var video = document.getElementById("capture-video");
-	var capturesContainer = document.getElementById("captures-container");
+	var App = {
+		video: null,
+		capturesContainer: null,
+		intervalMS: 2500,
 
-	function updateIdentifications() {
-
-		var canvas = document.createElement("canvas");
-		canvas.width = video.clientWidth / 2;
-		canvas.height = video.clientHeight / 2;
-		var canvasCtx = canvas.getContext('2d');
-		canvasCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-		$.ajax({
-			type: 'POST',
-			url: '/api/face/detect',
-            // Strip start of dataURL string which contains some funky stuff
-			data: { '': getBase64(canvas) }
-		})
-		.then(function (data) {
-		    var $predictQuestion = $('#predict-question');
-		    var $predictImg = $('#predict-image');
-		    var $predictName = $('#predict-name');
-
-			if (data && data.length) {
-			    var name = data[0].Name;
-				$predictImg.attr('src', "/api/face/image/" + name).addClass('known');
-				$predictName.text(name);
-				$predictQuestion.text('Är detta du?');
-			} else {
-			    $predictImg.attr('src', '/Content/unknown.png').removeClass('known');
-			    $predictName.text('');
-			    $predictQuestion.text('Vem är du?');
+		init: function() {
+			if (!this.isBrowserSupported()) {
+				this.showBrowserNotSupportedMessage();
+				return;
 			}
 
-		});
-	}
+			this.initDOM();
+			this.initCamera();
+		},
 
-	setInterval(updateIdentifications, 2500);
+		isBrowserSupported: function() {
+			return !!navigator && !!navigator.webkitGetUserMedia;
+		},
+
+		showBrowserNotSupportedMessage: function() {
+
+		},
+
+		initDOM: function() {
+			this.video = document.getElementById('capture-video');
+			this.capturesContainer = document.getElementById('captures-container');
+		},
+
+		initCamera: function() {
+			setInterval(this.updateIdentifications.bind(this), this.intervalMS);
+		},
+
+		updateIdentifications: function() {
+			var canvas = document.createElement("canvas");
+			canvas.width = this.video.clientWidth / 2;
+			canvas.height = this.video.clientHeight / 2;
+			var canvasCtx = canvas.getContext('2d');
+			canvasCtx.drawImage(this.video, 0, 0, canvas.width, canvas.height);
+
+			$.ajax({
+				type: 'POST',
+				url: '/api/face/detect',
+				data: { '': this.canvasToBase64(canvas) }
+			})
+			.then(function (data) {
+			    var $predictQuestion = $('#predict-question');
+			    var $predictImg = $('#predict-image');
+			    var $predictName = $('#predict-name');
+
+				if (data && data.length) {
+				    var name = data[0].Name;
+					$predictImg.attr('src', "/api/face/image/" + name).addClass('known');
+					$predictName.text(name);
+					$predictQuestion.text('Är detta du?');
+				} else {
+				    $predictImg.attr('src', '/Content/unknown.png').removeClass('known');
+				    $predictName.text('');
+				    $predictQuestion.text('Vem är du?');
+				}
+
+			});
+		},
+
+		canvasToBase64: function(canvas) {
+		    var dataurl = canvas.toDataURL('image/jpg');
+		    var stripped = dataurl.substring(22);
+		    return stripped;
+		}
+	};
 
 
-	function getBase64(canvas) {
-	    var dataurl = canvas.toDataURL('image/jpg');
-	    var stripped = dataurl.substring(22);
-	    return stripped;
-	}
 
 	function setupCapture() {
 		var captureButton = document.getElementById("capture-button");
@@ -103,7 +130,7 @@
 					waitHandles.push($.ajax({
 						type: 'POST',
 						url: '/api/face/learn/' + document.getElementById("user-name").value,
-						data: { '': getBase64(canvas) }
+						data: { '': this.canvasToBase64(canvas) }
 					}));
 				}
 			}
@@ -116,15 +143,23 @@
 		});
 	}
 
-	navigator.webkitGetUserMedia(
-	{ video: true },
-	function (stream) {
-		video.src = window.URL.createObjectURL(stream);
+	if (!navigator || navigator.webkitGetUserMedia)
+	{
+	  displayNotSupportedMessage();
+	}
+	else
+	{
+    navigator.webkitGetUserMedia({ video: true },
+      function (stream) {
+          video.src = window.URL.createObjectURL(stream);
 
-		setupCapture();
-	},
-	function (e) {
-		console.log(e)
-	});
+          setupCapture();
+      },
+      function (e) {
+          console.log(e)
+      });
+	}
 
-})();
+	
+
+})(jQuery);
