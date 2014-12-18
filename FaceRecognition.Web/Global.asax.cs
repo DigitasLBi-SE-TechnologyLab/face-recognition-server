@@ -11,6 +11,8 @@ namespace FaceRecognition.Web
 {
     public class WebApiApplication : System.Web.HttpApplication
     {
+        public int foo = 0;
+
         protected void Application_Start()
         {
             AreaRegistration.RegisterAllAreas();

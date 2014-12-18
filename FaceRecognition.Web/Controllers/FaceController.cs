@@ -10,49 +10,52 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Web.Hosting;
 using System.Web.Http;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Web;
 
 namespace FaceRecognition.Web.Controllers
 {
     [RoutePrefix("api/face")]
     public class FaceController : ApiController
     {
+        public static FaceRecognizer Recognizer = null;
+        public static CascadeClassifier Cascade = null;
 
-        private FaceRecognizer _recognizer = null;
-        protected FaceRecognizer Recognizer
+        protected static String[] IndicesToNames = new String[0];
+
+        public String UsersRoot { get { return HostingEnvironment.MapPath("~/App_Data/users"); } }
+        public String DebugRoot { get { return HostingEnvironment.MapPath("~/App_Data/debug"); } }
+
+        public static bool isTrained = false;
+
+        private readonly static Object recognizerLock = new Object();
+        private readonly static Object cascadeLock = new Object();
+        private readonly static Object streamLock = new Object();
+
+
+        private CascadeClassifier _Cascade
         {
             get
             {
-                if (_recognizer == null)
-                {
-                    _recognizer = FaceRecognizer.CreateEigenFaceRecognizer();
-                    TrainRecognizer();
-                }
-                return _recognizer;
+                if (Cascade == null)
+                    Cascade = new CascadeClassifier(HostingEnvironment.MapPath("~/App_Data/cascades/haarcascade_frontalface_alt2.xml"));
+                return Cascade;
             }
         }
-     
-        protected String UsersRoot
-        {
-            get { return HostingEnvironment.MapPath("~/App_Data/users"); }
-        }
-        
-        private CascadeClassifier _cascade = null;
-        protected CascadeClassifier Cascade
+        private FaceRecognizer _Recognizer
         {
             get
             {
-                if (_cascade == null)
-                {
-                    _cascade = new CascadeClassifier(HostingEnvironment.MapPath("~/App_Data/cascades/haarcascade_frontalface_alt2.xml"));
-                }
-                return _cascade;
+                if (Recognizer == null)
+                    Recognizer = FaceRecognizer.CreateEigenFaceRecognizer();
+                return Recognizer;
             }
         }
 
-        protected String[] IndicesToNames { get; set; }
 
 
-        protected void TrainRecognizer()
+        public void TrainRecognizer()
         {
             var root = UsersRoot;
 
@@ -61,6 +64,7 @@ namespace FaceRecognition.Web.Controllers
 
             var sw = new Stopwatch();
             sw.Start();
+
 
             var images = Directory.EnumerateDirectories(root)
                 .OrderBy(p => p)
@@ -76,15 +80,21 @@ namespace FaceRecognition.Web.Controllers
                     .Select(_ => i + 1))
                 .ToArray();
 
-            IndicesToNames = new[] { "Unknown" }.Concat(Directory.EnumerateDirectories(root)
-                .OrderBy(p => p)
-                .Select(Path.GetFileName))
-                .ToArray();
+            lock (IndicesToNames)
+            {
+                IndicesToNames = new[] { "Unknown" }.Concat(Directory.EnumerateDirectories(root)
+                    .OrderBy(p => p)
+                    .Select(Path.GetFileName))
+                    .ToArray();
+            }
 
-            Recognizer.Train(images, labels);
 
+            _Recognizer.Train(images, labels);
+            
             sw.Stop();
             Debug.WriteLine("TrainRecognizer: " + sw.ElapsedMilliseconds + "ms");
+
+            isTrained = true;
         }
 
 
@@ -98,12 +108,14 @@ namespace FaceRecognition.Web.Controllers
             var imageData = Convert.FromBase64String(image);
             var original = Mat.FromStream(new MemoryStream(imageData), LoadMode.AnyColor);
 
-            // TODO: Find faces and save them intead of the whole picture
-            CascadeClassifier haar_cascade = Cascade;
-
             var gray = original.CvtColor(ColorConversion.BgrToGray);
 
-            var faces = haar_cascade.DetectMultiScale(gray);
+            Rect[] faces;
+            lock (cascadeLock)
+            {
+                faces = Cascade.DetectMultiScale(gray);
+            }
+
             foreach (var faceRect in faces.OrderByDescending(p => p.Width * p.Height))
             {
                 var face = gray.SubMat(faceRect);
@@ -113,8 +125,12 @@ namespace FaceRecognition.Web.Controllers
                 break;
             }
 
-            TrainRecognizer();
+            lock (recognizerLock)
+            {
+                TrainRecognizer();
+            }
         }
+
 
         [HttpPost]
         [Route("detect")]
@@ -123,29 +139,53 @@ namespace FaceRecognition.Web.Controllers
             Stopwatch sw = new Stopwatch();
             sw.Start();
 
-            // TODO: check if it still breaks
-            CascadeClassifier haar_cascade = Cascade;
-
             var imageData = Convert.FromBase64String(image);
 
-            var original = Mat.FromStream(new MemoryStream(imageData), LoadMode.AnyColor);
+            Mat original;
+            lock (streamLock)
+            {
+                original = Mat.FromStream(new MemoryStream(imageData), LoadMode.AnyColor);
+            }
+            
             var gray = original.CvtColor(ColorConversion.BgrToGray);
 
             var users = new List<Models.User>();
 
-            var faces = haar_cascade.DetectMultiScale(gray);
-            foreach (var faceRect in faces)
+            Rect[] faces;
+            lock (cascadeLock)
             {
-                var face = gray.SubMat(faceRect);
-                var faceResized = face.Resize(new OpenCvSharp.CPlusPlus.Size(100, 100), 1, 1, Interpolation.Cubic);
-
-                int label;
-                double confidence;
-                Recognizer.Predict(faceResized, out label, out confidence);
-
-                Debug.WriteLine("{0} {1}", label, confidence);
-                users.Add(new Models.User(IndicesToNames[label], confidence));
+                faces = _Cascade.DetectMultiScale(gray);
             }
+            
+            lock (recognizerLock)
+            {
+                if (!isTrained)
+                {
+                    TrainRecognizer();
+                }
+
+                foreach (var faceRect in faces)
+                {
+                    var face = gray.SubMat(faceRect);
+                    var faceResized = face.Resize(new OpenCvSharp.CPlusPlus.Size(100, 100), 1, 1, Interpolation.Cubic);
+
+                    int label;
+                    double confidence;
+                    _Recognizer.Predict(faceResized, out label, out confidence);
+
+                    Debug.WriteLine("{0} {1}", label, confidence);
+                    users.Add(new Models.User(IndicesToNames[label], confidence));
+
+                    original.Rectangle(faceRect, new Scalar(0, 255, 0), 3);
+                    original.PutText(label.ToString(), faceRect.Location, FontFace.HersheyPlain, 1, new Scalar(0, 255, 0));
+                }
+            }
+
+            if (faces.Length > 0)
+            {
+                WriteDebugImage(original);
+            }
+            
 
             sw.Stop();
             Debug.WriteLine("DetectUser: " + sw.ElapsedMilliseconds + "ms");
@@ -172,6 +212,19 @@ namespace FaceRecognition.Web.Controllers
             response.Content.Headers.ContentType = MediaTypeHeaderValue.Parse("image/jpeg");
 
             return response;
+        }
+
+
+        protected void WriteDebugImage(Mat image)
+        {
+            var bitmap = Bitmap.FromStream(new MemoryStream(image.Resize(new OpenCvSharp.CPlusPlus.Size(256, 256), 1, 1, Interpolation.Cubic).ToBytes()));
+
+            var root = Path.Combine(DebugRoot, DateTime.Today.ToShortDateString());
+
+            Directory.CreateDirectory(root);
+            var path = Path.Combine(root, DateTime.Now.Ticks.ToString() + ".jpg");
+
+            // bitmap.Save(path);
         }
     }
 }
