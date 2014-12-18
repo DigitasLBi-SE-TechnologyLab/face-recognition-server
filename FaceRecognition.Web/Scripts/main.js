@@ -21,16 +21,32 @@
 		},
 
 		showBrowserNotSupportedMessage: function() {
-
+			$('body *').remove();
+			$('body').append($('<h1>', {
+				text: 'Please use Chrome, as it\'s a cooler browser.'
+			}));
 		},
 
 		initDOM: function() {
 			this.video = document.getElementById('capture-video');
 			this.capturesContainer = document.getElementById('captures-container');
+
+			$('#upload-button').click(this.uploadImages.bind(this));
+			$('#capture-button').click(this.captueImage.bind(this));
 		},
 
 		initCamera: function() {
-			setInterval(this.updateIdentifications.bind(this), this.intervalMS);
+			var self = this;
+			navigator.webkitGetUserMedia({
+				video: true
+			}, function (stream) {
+        video.src = window.URL.createObjectURL(stream);
+        setupCapture();
+      }, function (e) {
+          console.log(e);
+      });
+
+			setInterval(self.updateIdentifications.bind(self), self.intervalMS);
 		},
 
 		updateIdentifications: function() {
@@ -44,38 +60,26 @@
 				type: 'POST',
 				url: '/api/face/detect',
 				data: { '': this.canvasToBase64(canvas) }
-			})
-			.then(function (data) {
-			    var $predictQuestion = $('#predict-question');
-			    var $predictImg = $('#predict-image');
-			    var $predictName = $('#predict-name');
+			}).then(function (data) {
+			  var $predictQuestion = $('#predict-question');
+			  var $predictImg = $('#predict-image');
+			  var $predictName = $('#predict-name');
 
 				if (data && data.length) {
-				    var name = data[0].Name;
+				  var name = data[0].Name;
 					$predictImg.attr('src', "/api/face/image/" + name).addClass('known');
 					$predictName.text(name);
 					$predictQuestion.text('Är detta du?');
 				} else {
-				    $predictImg.attr('src', '/Content/unknown.png').removeClass('known');
-				    $predictName.text('');
-				    $predictQuestion.text('Vem är du?');
+				  $predictImg.attr('src', '/Content/unknown.png').removeClass('known');
+				  $predictName.text('');
+				  $predictQuestion.text('Vem är du?');
 				}
-
 			});
 		},
 
-		canvasToBase64: function(canvas) {
-		    var dataurl = canvas.toDataURL('image/jpg');
-		    var stripped = dataurl.substring(22);
-		    return stripped;
-		}
-	};
 
-
-
-	function setupCapture() {
-		var captureButton = document.getElementById("capture-button");
-		captureButton.addEventListener("click", function () {
+		captureImage: function() {
 			var rows = capturesContainer.querySelectorAll(".row");
 
 			var row;
@@ -93,12 +97,12 @@
 			var p1 = document.createElement("p");
 			captureCell.appendChild(p1);
 
-			var capture = document.createElement("canvas");
-			capture.width = video.clientWidth / 2;
-			capture.height = video.clientHeight / 2;
-			var captureCtx = capture.getContext('2d');
-			captureCtx.drawImage(video, 0, 0, capture.width, capture.height);
-			p1.appendChild(capture);
+			var canvas = document.createElement("canvas");
+			canvas.width = video.clientWidth / 2;
+			canvas.height = video.clientHeight / 2;
+			var captureCtx = canvas.getContext('2d');
+			captureCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
+			p1.appendChild(canvas);
 
 			var p2 = document.createElement("p");
 			captureCell.appendChild(p2);
@@ -117,10 +121,10 @@
 			
 
 			row.appendChild(captureCell);
-		});
+		},
 
-		var uploadButton = document.getElementById("upload-button");
-		uploadButton.addEventListener("click", function () {
+
+		uploadImages: function() {
 			var canvases = capturesContainer.querySelectorAll("canvas");
 
 			var waitHandles = [];
@@ -137,29 +141,20 @@
 
 			$.when.apply($, waitHandles)
 				.then(function () {
-					// updateIdentifications();
 					alert("done uploading");
 				});
-		});
-	}
+		},
 
-	if (!navigator || navigator.webkitGetUserMedia)
-	{
-	  displayNotSupportedMessage();
-	}
-	else
-	{
-    navigator.webkitGetUserMedia({ video: true },
-      function (stream) {
-          video.src = window.URL.createObjectURL(stream);
 
-          setupCapture();
-      },
-      function (e) {
-          console.log(e)
-      });
-	}
+		canvasToBase64: function(canvas) {
+		    var dataurl = canvas.toDataURL('image/jpg');
+		    var stripped = dataurl.substring(22);
+		    return stripped;
+		}
+	};
 
+
+	App.init();
 	
 
 })(jQuery);
