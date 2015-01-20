@@ -23,7 +23,11 @@
 		showBrowserNotSupportedMessage: function() {
 			$('body *').remove();
 			$('body').append($('<h1>', {
-				text: 'Please use Chrome, as it\'s a cooler browser.'
+				css: {
+					textAlign: 'center',
+					fontSize: '4em'
+				},
+				text: 'Please use Chrome, as it\'s a much cooler browser.'
 			}));
 		},
 
@@ -32,7 +36,7 @@
 			this.capturesContainer = document.getElementById('captures-container');
 
 			$('#upload-button').click(this.uploadImages.bind(this));
-			$('#capture-button').click(this.captueImage.bind(this));
+			$('#capture-button').click(this.captureImage.bind(this));
 		},
 
 		initCamera: function() {
@@ -40,8 +44,7 @@
 			navigator.webkitGetUserMedia({
 				video: true
 			}, function (stream) {
-        video.src = window.URL.createObjectURL(stream);
-        setupCapture();
+        self.video.src = window.URL.createObjectURL(stream);
       }, function (e) {
           console.log(e);
       });
@@ -80,6 +83,7 @@
 
 
 		captureImage: function() {
+			var capturesContainer = this.capturesContainer;
 			var rows = capturesContainer.querySelectorAll(".row");
 
 			var row;
@@ -97,6 +101,7 @@
 			var p1 = document.createElement("p");
 			captureCell.appendChild(p1);
 
+			var video = this.video;
 			var canvas = document.createElement("canvas");
 			canvas.width = video.clientWidth / 2;
 			canvas.height = video.clientHeight / 2;
@@ -125,6 +130,7 @@
 
 
 		uploadImages: function() {
+			var capturesContainer = this.capturesContainer;
 			var canvases = capturesContainer.querySelectorAll("canvas");
 
 			var waitHandles = [];
@@ -140,11 +146,13 @@
 			}
 
 			$.when.apply($, waitHandles)
-				.then(function () {
-					alert("done uploading");
-				});
+				.then(this.onUploadDone.bind(this));
 		},
 
+
+		onUploadDone: function() {
+			
+		},
 
 		canvasToBase64: function(canvas) {
 		    var dataurl = canvas.toDataURL('image/jpg');

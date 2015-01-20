@@ -1,0 +1,12 @@
+{
+	"haarcascade": "haarcascade_frontalface_alt2.xml",
+	"recognizer": "eigen",
+	"recognizer_num_components": 80,
+	"recognizer_threshold": 20000000.0,
+	"face_rectangle_min_width": 10,
+	"face_rectangle_min_height": 10,
+	"recognizer_boundary_x": 200,
+	"recognizer_boundary_y": 140,
+	"recognizer_boundary_width": 300,
+	"recognizer_boundary_height": 290
+}
